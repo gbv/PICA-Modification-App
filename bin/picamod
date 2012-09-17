@@ -1,0 +1,84 @@
+#!/usr/bin/perl
+#PODNAME:  picamod
+#ABSTRACT: Access to PICA modification queues
+
+use strict;
+use warnings;
+
+use App::Picamod;
+use App::Run;
+
+my $app = App::Picamod->new;
+App::Run->new( $app, 
+	loglevel => 'INFO',
+	logger => [{
+		class  => 'Log::Log4perl::Appender::Screen',
+		layout => '%p: %m{chomp}%n'
+	}],
+)->run_with_args( @ARGV );
+
+=head1 NAME
+
+picamod - access to PICA modification queues via command line
+
+=head1 SYNOPSIS
+
+  picamod request < edit
+          check editid
+          preview editid
+          preview < edit
+          list [done|failed|rejected|pending] [limit=N]
+          reject editid [message]
+ 
+  Configuration values can also be passed as key=value pairs.
+
+=head1 CONFIGURATION
+
+Configuration is read from a config file (e.g. C<picamod.yml>. The
+following config values are recognized, among others:
+
+=over 4
+
+=item database
+
+A database connection with fields C<dsn>, C<user>, and C<password>.
+
+=item unapi
+
+Base URL of an unAPI server to retrieve records from.
+
+=item loglevel
+
+Logging level (ALL,TRACE,DEBUG,INFO,WARN,ERROR,FATAL). Set to INFO by default.
+
+=back
+
+Configuration values can be passed on command line or read from config file.
+
+=head1 OPTIONS
+
+=over 4
+
+=item -c, --config
+
+Point to a config file.
+
+=item -h, --help
+
+Print short help and exit.
+
+=item -v, --version
+
+Print version and exit.
+
+=item -q, --quiet
+
+Set logging level to only show errors.
+
+=back
+
+=head1 SEE ALSO
+
+This command line application is implemented with L<App::Run>.
+
+=cut
