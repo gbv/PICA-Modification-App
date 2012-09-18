@@ -18,32 +18,39 @@ use v5.10;
         bless [$app], $class;
     }
 
-    sub insert {   # picamod insert < edit
+    sub insert {   # picamod insert < mod.json
         my ($self, $mod) = @_;
         my $json = JSON->new->encode( $mod->attributes );
-        return $self->run('request', \$json);
+        $self->run({}, 'request', \$json);
     }
 
     sub list {     # picamod list [options]
         my ($self, %options) = @_;
-
-        my $list = $self->run('list'); # TODO: sort, limit etc.
-
+        my $list = $self->run( \%options, 'list' ) // "[]";
         return JSON->new->decode($list);
     }
 
-    sub get {
+    sub get {      # picamod get {id}
         my ($self, $id) = @_;
-
-        $self->run('check', $id);
+        my $got = $self->run({}, 'get', $id) // return;
+        return JSON->new->decode($got);
     }
 
-    sub update {
+    sub delete {   # picamod delete {id}
+        my ($self, $id) = @_;
+        return $self->run({}, 'delete', $id);
+    }
+
+    sub update {   # picamod replace {id} < mod.json
+        my ($self, $id, $mod) = @_;
+        my $json = JSON->new->encode( $mod->attributes );
+        $self->run({}, 'replace', $id, \$json);
     }
 
     # run app, optionally provide STDIN, capture and return output
     sub run {
-        my $self = shift;
+        my $self    = shift;
+        my $options = shift;
         my $app = $self->[0];
 
         local *STDIN;
@@ -51,10 +58,11 @@ use v5.10;
 
         my $capture = IO::Capture::Stdout->new();
         $capture->start;
-        $app->run( {}, @_ );
+        $app->run( $options, @_ );
         $capture->stop;
 
-        return join('', $capture->read);
+        my $out = join('', $capture->read);
+        return $out eq '' ? undef : $out;
     }
 
     1;
@@ -66,33 +74,28 @@ use PICA::Modification::TestQueue;
 use File::Temp qw(tempfile);
 use PICA::Record;
 
-#$ENV{PICAMOD_UPTO} = 'TRACE';
+#$ENV{PICAMOD_UPTO} = 'DEBUG';
 #$ENV{PICA_QUEUE_UPTO} = 'TRACE';
 
 my $dbfile;
 (undef,$dbfile) = tempfile();
 my $dsn = "dbi:SQLite:dbname=$dbfile";
 
-my $app = App::Picamod->new;
-$app->init( { unapi => sub { 
+my $unapi = sub { 
     my $id = shift;
     return unless $id =~ /ppn:([^:]+)$/;
     return PICA::Record->new( '003@ $0'.$1 );
-},
-    type => 'Database', queue => { database =>{ dsn => $dsn } },
- } );
+};
 
-my $q = PICA::Modification::Queue::WrapApp->new( $app );
+my $app = App::Picamod->new;
+$app->init( { unapi => $unapi, 
+    type => 'Database', queue => { dsn => $dsn },
+} );
 
-my $id = $q->insert( PICA::Modification->new( add => '012A $xfoo', id => 'foo:ppn:789' ) );
-ok($id, "inserted: $id");
+my $wrap = new_ok('PICA::Modification::Queue::WrapApp' => [ $app ]);
 
-#test_queue 'App::Picamod' => $queue;
+is $wrap->run({},'list'), undef, 'empty list';
 
-my $l = $q->list(); # should be REQUESTs when using a Database
-use Data::Dumper; say Dumper($l);
-#explain($l);
-
-$q->get(1);
+test_queue $wrap, 'App::Picamod';
 
 done_testing;

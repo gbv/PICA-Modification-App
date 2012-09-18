@@ -11,7 +11,8 @@ use Scalar::Util qw(reftype blessed);
 use Log::Contextual::WarnLogger;
 use Log::Contextual qw(:log :dlog), 
 	-default_logger => Log::Contextual::WarnLogger->new({ env_prefix => 'PICAMOD' });
-use PICA::Modification;
+
+use PICA::Modification 0.131;
 use PICA::Modification::Queue;
 
 use LWP::Simple ();
@@ -39,8 +40,9 @@ sub init {
     if (!ref $self->{unapi}) {
         my $unapi = $self->{unapi};
         $self->{unapi} = sub {
+            my $id = shift;
             try { 
-                my $url = $unapi . '?format=pp&id=' . shift;
+                my $url = $unapi . '?format=pp&id=' . $id;
         		log_trace { $url };
                 PICA::Record->new( LWP::Simple::get( $url ) ); 
             } catch {
@@ -124,7 +126,7 @@ sub run {
 	my $cmd = shift @args || die "missing command. Use -h for help.\n";
 	my $method = "command_$cmd";
 	if ( $self->can($method) ) {
-		my $result = $self->$method(@args);
+		my $result = $self->$method($options,@args);
 		if (defined $result) {
 			if (ref $result) {
 				say $JSON->encode($result);
@@ -144,7 +146,8 @@ Request a new edit.
 =cut
 
 sub command_request {
-    my $self = shift;
+    my $self    = shift;
+    my $options = shift;
     my $queue = $self->{queue};
 
     my $edit = $self->modification_request(@_);
@@ -168,6 +171,27 @@ sub command_request {
 	undef;
 }
 
+sub command_replace {
+    my $self    = shift;
+    my $options = shift;
+    my $id      = shift;
+
+    my $old = $self->{queue}->get($id);
+    if (!defined $old) {
+        log_error { "request not found: $id" }
+        return;
+    }
+
+    my $edit = $self->modification_request(@_);
+    if ($edit->error) {
+        log_error { $self->edit_error( "malformed edit" => $edit ) };
+        return;
+    }
+
+    return $self->{queue}->update( $id => PICA::Modification->new( %{$edit->attributes} ) );
+}
+
+
 =head2 command_preview
 
 Looks up an edit requests's edit, applies the edit and shows the result.
@@ -175,7 +199,8 @@ Looks up an edit requests's edit, applies the edit and shows the result.
 =cut
 
 sub command_preview {
-    my $self = shift;
+    my $self    = shift;
+    my $options = shift;
 
 	my @records;
 
@@ -186,6 +211,16 @@ sub command_preview {
 	return join ("\n", @records);
 }
 
+sub command_get { 
+    my $self    = shift;
+    my $options = shift;
+
+    my @mods;
+    $self->iterate_edits( sub { push @mods, $_ } => @_ );
+
+    return (scalar @mods > 1 ? \@mods : $mods[0]);
+}
+
 =head2 command_check
 
 Check edits and mark as done on success, unless already processed.
@@ -193,7 +228,8 @@ Check edits and mark as done on success, unless already processed.
 =cut
 
 sub command_check { 
-    my $self = shift;
+    my $self    = shift;
+    my $options = shift;
 
     $self->iterate_edits( sub {
 		my ($status,$edit_id) = ($_->{status},$_->{edit_id});
@@ -232,6 +268,7 @@ sub command_check {
 
 sub command_reject {
     my $self    = shift;
+    my $options = shift;
 
     $self->iterate_edits( sub {
         ...
@@ -240,28 +277,32 @@ sub command_reject {
 	undef;
 }
 
-sub command_remove {
-    my $self = shift;
+sub command_delete {
+    my $self    = shift;
+    my $options = shift;
 
     log_error { "expect edit_id as argument" } unless @_;
 
+    my @ids;
+
     foreach my $id (@_) {
-        unless (/^\d+$/) {
+        unless ($id =~ /^\d+$/) {
             log_warn { "invalid edit_id: $id" };
             next;
         }
-
-        my $ok = $self->{queue}->delete( $id );
-		# TODO: $ok must be equal to $id on succes
+        my $is = $self->{queue}->delete( $id );
+        push @ids, $is if defined $is;
     }
+    return(join "\n", @ids) if @ids;
 
 	undef;
 }
 
 sub command_list {
-    my $self   = shift;
+    my $self    = shift;
+    my $options = shift;
 
-    my $status = @_ ? shift : $self->{status};
+    my $status = @_ ? shift : $options->{status};
     $status = do { given ($status) {
         when ('pending') { 0; };
         when ('rejected') { -1; };
@@ -270,16 +311,19 @@ sub command_list {
         default { '' };
     } };
     
-    my %where = ();
+    my @fields = qw(page limit sort status id request created creator updated epn iln add del);
+    my @keys   = grep { 
+        my $k = $_;
+        grep { $k eq $_ } @fields;
+    } keys %$options;
+
+    my %where = map { $_ => $options->{$_} } @keys;
     $where{status} = $status if $status =~ /^(-1|0|1|2)$/;
 
-    foreach (qw(iln epn creator id del add)) {
-        $where{$_} = $self->{$_} if $self->{$_};
-    }
-
-    $where{limit} = $self->{limit} if ($self->{limit} || '') =~ /^\d+$/;
+    log_debug { join ' ', 'list', %where };
 
     my $list = $self->{queue}->list( %where );
+    return unless @$list; # empty
 
 	return $JSON->allow_blessed->convert_blessed->encode($list);
 }

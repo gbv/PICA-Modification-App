@@ -25,13 +25,9 @@ my $dbfile;
 my $dsn = "dbi:SQLite:dbname=$dbfile";
 my $dbh = DBI->connect($dsn,"",""); 
 
-new_ok 'PICA::Modification::Queue' => [ 
-    'Database', database => $dbh 
-];
+new_ok 'PICA::Modification::Queue' => [ 'Database', $dbh ];
+my $q = new_ok 'PICA::Modification::Queue' => [ 'Database', dsn => $dsn ];
 
-my $q = new_ok 'PICA::Modification::Queue' => [ 
-    'Database', database => { dsn => $dsn } 
-];
 test_queue $q, 'PICA::Modification::Queue::DB';
 
 done_testing;

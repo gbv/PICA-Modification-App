@@ -10,11 +10,11 @@ use App::Run;
 
 my $app = App::Picamod->new;
 App::Run->new( $app, 
-	loglevel => 'INFO',
-	logger => [{
-		class  => 'Log::Log4perl::Appender::Screen',
-		layout => '%p: %m{chomp}%n'
-	}],
+    loglevel => 'INFO',
+    logger => [{
+        class  => 'Log::Log4perl::Appender::Screen',
+        layout => '%p: %m{chomp}%n'
+    }],
 )->run_with_args( @ARGV );
 
 =head1 NAME
@@ -23,13 +23,26 @@ picamod - access to PICA modification queues via command line
 
 =head1 SYNOPSIS
 
-  picamod request < edit
+  # request a new modification
+  picamod request < mod.json
+
+  # get modification request
+  picamod get {request_id}
+
+  # list queued modification requests
+  picamod list [done|failed|rejected|pending] [limit=N page=N sort=K ...]
+
           check editid
           preview editid
           preview < edit
-          list [done|failed|rejected|pending] [limit=N]
           reject editid [message]
+
+  # delete request
+  delete editid
  
+  # replace request
+  replace editid < mod.json
+
   Configuration values can also be passed as key=value pairs.
 
 =head1 CONFIGURATION

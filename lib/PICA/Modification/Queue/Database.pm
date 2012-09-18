@@ -3,7 +3,7 @@ package PICA::Modification::Queue::Database;
 
 use strict;
 use warnings;
-use v5.12;
+use v5.10;
 
 use parent 'PICA::Modification::Queue';
 
@@ -30,15 +30,12 @@ Create a new Queue. See L</database> for configuration.
 =cut
 
 sub new {
-    my ($class,%config) = @_;
-
-    my $self = bless { }, $class;
-	$self->database( $config{database} );
-
+    my $self = bless { }, shift;
+	$self->database( @_ );
     $self;
 }
 
-=method database( [ $dbh | { %config } | %config ] )
+=method database( [ $dbh | %config ] )
 
 Get or set a database connection either as L<DBI> handle (config value C<dbh>)
 or with C<dsn>, C<username>, and C<password>. One can also set the C<table>. 
@@ -175,14 +172,15 @@ sub _dbdo {
 sub list {
 	my ($self, %options) = @_;
 
-	my $pagesize = delete $options{pagesize} || 20;
-    my $page     = delete $options{page} || 1;
-    my $sort     = delete $options{sort} || 'updated';
+	my $limit = delete $options{limit} || 20;
+    my $page  = delete $options{page} || 1;
+    my $sort  = delete $options{sort} || 'updated';
 
-    my $offset = ($page-1)*$pagesize;
-    my $limit  = $pagesize;
-
-	return [ $self->select( { %options }, { limit => $limit, orderby => $sort, offset => $offset } ) ];
+	return [ $self->select( { %options }, { 
+        limit  => $limit, 
+        sort   => $sort, 
+        offset => ($page-1)*$limit, 
+    } ) ];
 }
 
 =method select( { key => $value ... } [ , { limit => $limit } ] )
@@ -199,14 +197,14 @@ sub select {
     my $table = $db->quote_identifier($self->{table});
 
     my $limit   = $opts->{limit} || (wantarray ? 0 : 1);
-    my $orderby = $opts->{orderby} || 'updated';
+    my $orderby = $opts->{sort}  || 'updated';
     my $offset  = $opts->{offset} || 0;
 
     my $which_cols = '*';
     # $which_cols = join(',', map { $db->quote_identifier($_) } @cols);
 
-    my @bind_params;
-    ($where, @bind_params) = $self->_where_clause( $where );
+    my @bind;
+    ($where, @bind) = $self->_where_clause( $where );
 
     my $sql = "SELECT $which_cols FROM $table $where"
             . " ORDER BY " . $db->quote_identifier($orderby);
@@ -216,9 +214,9 @@ sub select {
     log_trace { $sql };
 
     if ($limit == 1) {
-        return $db->selectrow_hashref( $sql, undef, @bind_params );
+        return $db->selectrow_hashref( $sql, undef, @bind );
     } else {
-        return @{ $db->selectall_arrayref( $sql, { Slice => {} }, @bind_params ) };
+        return @{ $db->selectall_arrayref( $sql, { Slice => {} }, @bind ) };
     }
 }
 
