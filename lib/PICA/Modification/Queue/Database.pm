@@ -14,6 +14,7 @@ use Log::Contextual::WarnLogger;
 use Log::Contextual qw(:log :dlog), 
 	-default_logger => Log::Contextual::WarnLogger->new({ env_prefix => 'PICA_QUEUE' });
 use PICA::Modification;
+use PICA::Modification::Request;
 
 =head1 DESCRIPTION
 
@@ -97,17 +98,16 @@ SQL
 	return $self->{db};
 }
 
-=method insert( $edit, %attr )
+=method request( $modification, %attr )
 
 Insert a L<PICA::Modification>. The edit is stored with a timestamp and
 creator unless it is malformed. Returns an edit identifier or success. 
  
 =cut
 
-sub insert {
+sub request {
     my ($self, $edit, %attr) = @_;
-    #croak("malformed edit") if !$edit or $edit->error;
-    return if !$edit or $edit->error;
+    return if !$edit or $edit->isa('PICA::Modification::Request') or $edit->error;
 
     my %data = ( map { $_ => $edit->{$_} } qw(id iln epn add del creator) );
     $data{creator} = $attr{creator} || '';
@@ -222,7 +222,8 @@ sub select {
 
 sub get {
 	my ($self, $request) = @_;
-	return $self->select( { request => $request } );
+	my $res = $self->select( { request => $request } );
+	return defined $res ? PICA::Modification::Request->new($res) : undef;
 }
 
 sub _where_clause {

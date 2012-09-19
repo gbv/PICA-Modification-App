@@ -12,7 +12,7 @@ use Log::Contextual::WarnLogger;
 use Log::Contextual qw(:log :dlog), 
 	-default_logger => Log::Contextual::WarnLogger->new({ env_prefix => 'PICAMOD' });
 
-use PICA::Modification 0.131;
+use PICA::Modification 0.132;
 use PICA::Modification::Queue;
 
 use LWP::Simple ();
@@ -21,7 +21,7 @@ use File::Slurp;
 use IO::Interactive qw(is_interactive);
 
 use JSON  -convert_blessed_universally;
-our $JSON = JSON->new->utf8(1)->pretty(1);
+our $JSON = JSON->new->utf8(1)->pretty(1)->convert_blessed;
 
 sub new {
 	my $class = shift;
@@ -159,7 +159,7 @@ sub command_request {
         log_error { $self->edit_error( "malformed edit" => $edit ) };
 		# TODO: emit error object
     } else {
-        my $request = $queue->insert( PICA::Modification->new( %{$edit->attributes} ) );
+        my $request = $queue->request( $edit );
 		if ($request) {
 			log_info { "New edit request accepted: $request" } 
             return $request;

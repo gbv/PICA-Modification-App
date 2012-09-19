@@ -11,15 +11,17 @@ use v5.10;
     use Scalar::Util qw(reftype);
     use IO::Capture::Stdout;
     use IO::Scalar;
-    use JSON;
+	use PICA::Modification::Request;
+	use JSON -convert_blessed_universally;
 
     sub new { 
         my ($class, $app) = @_;
         bless [$app], $class;
     }
 
-    sub insert {   # picamod insert < mod.json
+    sub request {   # picamod insert < mod.json
         my ($self, $mod) = @_;
+		return if $mod->isa('PICA::Modification::Request');
         my $json = JSON->new->encode( $mod->attributes );
         $self->run({}, 'request', \$json);
     }
@@ -33,7 +35,7 @@ use v5.10;
     sub get {      # picamod get {id}
         my ($self, $id) = @_;
         my $got = $self->run({}, 'get', $id) // return;
-        return JSON->new->decode($got);
+        return PICA::Modification::Request->new( JSON->new->decode($got) );
     }
 
     sub delete {   # picamod delete {id}

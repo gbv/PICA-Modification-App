@@ -49,7 +49,7 @@ sub get {
 	return PICA::Modification::Request->new(%$data);  
 }
 
-sub insert {
+sub request {
     my ($self, $edit) = @_;
 
 	my $data = $edit->attributes;
@@ -86,7 +86,7 @@ sub list {
 	...;
 }
 
-sub request {
+sub _request {
 	my ($self, $request) = @_;
 
 	log_debug { $request->method . " " . $request->uri };
@@ -102,7 +102,7 @@ sub request {
 
 sub json_request {
 	my ($self, $request) = @_;
-	my $res = $self->request($request) || return '';
+	my $res = $self->_request($request) || return '';
 
 	return unless $self->header('Content-Type') =~ qr{^application/json};
 
